@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>レターパック宛名ラベルメーカー</title>
+<style>
+  :root { --accent: #c8102e; --line: #d5d8dc; --bg: #f3f4f6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif; background: var(--bg); color: #1f2328; }
+  header { background: var(--accent); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 6px 12px; }
+  button.primary { background: #fff; color: var(--accent); font-weight: bold; border-color: #fff; padding: 8px 20px; }
+  button.danger { color: var(--accent); }
+  main { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 20px; padding: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .row label { width: 78px; font-size: 12px; color: #555; flex-shrink: 0; }
+  .row input[type=text], .row input[type=tel], .row input[type=number], .row select { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; }
+  .row input.short { flex: 0 0 110px; }
+  .hint { font-size: 12px; color: #666; margin: 4px 0 0; line-height: 1.6; }
+  .sizes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .sizes label { font-size: 12px; color: #555; display: flex; flex-direction: column; gap: 3px; }
+  .sizes input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; width: 100%; }
+  .checks { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; }
+
+  /* プレビュー (A4) */
+  #previewWrap { overflow: auto; }
+  #sheet { background: #fff; width: 210mm; min-height: 297mm; padding: 10mm; box-shadow: 0 2px 10px rgba(0,0,0,.15); display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6mm; }
+  .set { display: flex; flex-direction: column; gap: 3mm; break-inside: avoid; page-break-inside: avoid; }
+  .label { border: 0.3mm dashed #888; padding: 2.5mm 4mm; color: #000; background: #fff; overflow: hidden; display: flex; flex-direction: column; font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", serif; }
+  .gothic .label { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif; }
+  .label .head { font-size: 2.6mm; font-family: sans-serif; font-weight: bold; letter-spacing: .1em; border-bottom: 0.2mm solid #000; padding-bottom: .8mm; margin-bottom: 1.2mm; }
+  .label .zip { letter-spacing: .12em; }
+  .label .addr { white-space: pre-wrap; word-break: break-all; line-height: 1.35; }
+  .label .name { font-weight: bold; margin-top: auto; }
+  .label .name small { font-weight: normal; margin-left: .6em; }
+  .label .tel { font-family: sans-serif; text-align: right; }
+  .label.to .zip { font-size: 5mm; }
+  .label.to .addr { font-size: 4.6mm; }
+  .label.to .name { font-size: 7.5mm; padding-left: 4mm; }
+  .label.to .name small { font-size: 5.5mm; }
+  .label.to .tel { font-size: 3.4mm; }
+  .label.from .zip { font-size: 3.6mm; }
+  .label.from .addr { font-size: 3.4mm; }
+  .label.from .name { font-size: 4.6mm; padding-left: 3mm; }
+  .label.from .tel { font-size: 3mm; }
+  .label.item { flex-direction: row; align-items: center; gap: 3mm; font-size: 4mm; padding: 1mm 4mm; }
+  .label.item .head { border: 0; margin: 0; padding: 0; }
+
+  @page { size: A4; margin: 10mm; }
+  @media print {
+    body { background: #fff; }
+    header, #form, .noprint { display: none !important; }
+    main { display: block; padding: 0; }
+    #previewWrap { overflow: visible; }
+    #sheet { width: auto; min-height: 0; padding: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>レターパック宛名ラベルメーカー</h1>
+  <button class="primary" onclick="window.print()">印刷する</button>
+</header>
+<main>
+  <div id="form">
+    <div class="panel">
+      <h2>ご依頼主（自分）</h2>
+      <div id="fromFields"></div>
+      <div class="row"><label>品名</label><input type="text" id="item" placeholder="例: 書類"></div>
+    </div>
+
+    <div id="recipients"></div>
+    <button onclick="addRecipient()">＋ お届け先を追加</button>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>ラベル設定</h2>
+      <div class="sizes">
+        <label>幅 (mm)<input type="number" id="w" min="50" max="190"></label>
+        <label>お届け先の高さ (mm)<input type="number" id="toH" min="25" max="150"></label>
+        <label>ご依頼主の高さ (mm)<input type="number" id="fromH" min="20" max="150"></label>
+        <label>品名の高さ (mm)<input type="number" id="itemH" min="6" max="40"></label>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="showFrom"> ご依頼主ラベル</label>
+        <label><input type="checkbox" id="showItem"> 品名ラベル</label>
+        <label><input type="checkbox" id="gothic"> ゴシック体</label>
+      </div>
+      <p class="hint">
+        寸法は目安の初期値です。お手元のレターパックの記入欄を定規で測って調整してください。<br>
+        印刷時はブラウザの印刷設定で <b>用紙 A4・倍率 100%（「用紙に合わせる」はオフ）</b> にしてください。点線に沿って切り取って貼ります。<br>
+        入力内容はこのブラウザ内（localStorage）にのみ保存されます。
+      </p>
+      <button class="danger" onclick="resetAll()">すべてリセット</button>
+    </div>
+  </div>
+
+  <div id="previewWrap">
+    <div id="sheet"></div>
+  </div>
+</main>
+
+<script>
+const KEY = 'letterpack-address-maker-v1';
+const FIELDS = [
+  ['zip', '郵便番号', '123-4567'],
+  ['addr1', '住所1', '東京都千代田区丸の内1-1-1'],
+  ['addr2', '住所2', '建物名・部屋番号'],
+  ['org', '会社・部署', '（任意）'],
+  ['name', '氏名', '山田 太郎'],
+  ['tel', '電話番号', '03-1234-5678'],
+];
+const emptyAddr = () => ({ zip: '', addr1: '', addr2: '', org: '', name: '', tel: '', honorific: '様' });
+const defaults = () => ({
+  from: emptyAddr(), item: '', recipients: [emptyAddr()],
+  w: 124, toH: 65, fromH: 50, itemH: 10, showFrom: true, showItem: true, gothic: false,
+});
+
+let state = defaults();
+try { state = Object.assign(defaults(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+if (!Array.isArray(state.recipients) || !state.recipients.length) state.recipients = [emptyAddr()];
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function el(tag, props = {}, ...children) {
+  const e = Object.assign(document.createElement(tag), props);
+  children.forEach(c => c && e.append(c));
+  return e;
+}
+function formatZip(z) {
+  const d = (z || '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '');
+  return d.length === 7 ? d.slice(0, 3) + '-' + d.slice(3) : (z || '');
+}
+
+// ---- 入力フォーム ----
+function addrFields(obj, withHonorific) {
+  const box = el('div');
+  FIELDS.forEach(([k, label, ph]) => {
+    const input = el('input', { type: k === 'tel' ? 'tel' : 'text', value: obj[k] || '', placeholder: ph });
+    input.oninput = () => { obj[k] = input.value; update(); };
+    const row = el('div', { className: 'row' }, el('label', { textContent: label }), input);
+    if (k === 'zip') {
+      input.className = 'short';
+      input.onblur = () => { obj.zip = input.value = formatZip(input.value); update(); };
+      const btn = el('button', { textContent: '住所検索', type: 'button' });
+      btn.onclick = () => lookupZip(obj, box, btn);
+      row.append(btn);
+    }
+    if (k === 'name' && withHonorific) {
+      const sel = el('select', { style: 'flex:0 0 80px' });
+      ['様', '御中', '殿', '先生', '行', '（なし）'].forEach(h => sel.append(el('option', { textContent: h, value: h === '（なし）' ? '' : h })));
+      sel.value = obj.honorific ?? '様';
+      sel.onchange = () => { obj.honorific = sel.value; update(); };
+      row.append(sel);
+    }
+    input.dataset.k = k;
+    box.append(row);
+  });
+  return box;
+}
+
+// 郵便番号 → 住所 (zipcloud API / JSONP)
+function lookupZip(obj, box, btn) {
+  const zip = formatZip(obj.zip).replace('-', '');
+  if (!/^\d{7}$/.test(zip)) { alert('郵便番号を7桁で入力してください'); return; }
+  const cb = '__zip_cb_' + Date.now();
+  const s = document.createElement('script');
+  const done = () => { delete window[cb]; s.remove(); btn.disabled = false; };
+  btn.disabled = true;
+  window[cb] = res => {
+    done();
+    const r = res && res.results && res.results[0];
+    if (!r) { alert('住所が見つかりませんでした'); return; }
+    obj.addr1 = r.address1 + r.address2 + r.address3;
+    const input = box.querySelector('input[data-k=addr1]');
+    input.value = obj.addr1; input.focus();
+    update();
+  };
+  s.onerror = () => { done(); alert('住所検索に失敗しました（ネットワークを確認してください）'); };
+  s.src = 'https://zipcloud.ibsnet.co.jp/api/search?zipcode=' + zip + '&callback=' + cb;
+  document.head.append(s);
+}
+
+function renderForm() {
+  const ff = document.getElementById('fromFields');
+  ff.replaceChildren(addrFields(state.from, false));
+  const wrap = document.getElementById('recipients');
+  wrap.replaceChildren();
+  state.recipients.forEach((r, i) => {
+    const del = el('button', { textContent: '削除', className: 'danger', type: 'button' });
+    del.onclick = () => { state.recipients.splice(i, 1); if (!state.recipients.length) state.recipients.push(emptyAddr()); renderForm(); update(); };
+    const dup = el('button', { textContent: '複製', type: 'button' });
+    dup.onclick = () => { state.recipients.splice(i + 1, 0, { ...r }); renderForm(); update(); };
+    const h = el('h2', {}, el('span', { textContent: 'お届け先 ' + (state.recipients.length > 1 ? i + 1 : '') }), el('span', {}, dup, ' ', del));
+    wrap.append(el('div', { className: 'panel' }, h, addrFields(r, true)));
+  });
+}
+function addRecipient() { state.recipients.push(emptyAddr()); renderForm(); update(); }
+function resetAll() {
+  if (!confirm('入力内容をすべて消去します。よろしいですか？')) return;
+  state = defaults(); bindSettings(); renderForm(); update();
+}
+
+// ---- 設定 ----
+function bindSettings() {
+  document.getElementById('item').value = state.item;
+  document.getElementById('item').oninput = e => { state.item = e.target.value; update(); };
+  ['w', 'toH', 'fromH', 'itemH'].forEach(id => {
+    const i = document.getElementById(id);
+    i.value = state[id];
+    i.oninput = () => { const v = parseFloat(i.value); if (v > 0) { state[id] = v; update(); } };
+  });
+  ['showFrom', 'showItem', 'gothic'].forEach(id => {
+    const i = document.getElementById(id);
+    i.checked = state[id];
+    i.onchange = () => { state[id] = i.checked; update(); };
+  });
+}
+
+// ---- ラベル描画 ----
+function addrLabel(kind, a, h) {
+  const isTo = kind === 'to';
+  const l = el('div', { className: 'label ' + kind });
+  l.style.width = state.w + 'mm';
+  l.style.height = h + 'mm';
+  l.append(el('div', { className: 'head', textContent: isTo ? 'お届け先 TO' : 'ご依頼主 FROM' }));
+  l.append(el('div', { className: 'zip', textContent: '〒 ' + formatZip(a.zip) }));
+  l.append(el('div', { className: 'addr', textContent: [a.addr1, a.addr2, a.org].filter(Boolean).join('\n') }));
+  const name = el('div', { className: 'name', textContent: a.name || '' });
+  const hon = isTo ? (a.honorific ?? '様') : (a.name ? '' : '');
+  if (isTo && a.name && hon) name.append(el('small', { textContent: hon }));
+  l.append(name);
+  l.append(el('div', { className: 'tel', textContent: a.tel ? 'TEL ' + a.tel : '' }));
+  return l;
+}
+function renderSheet() {
+  const sheet = document.getElementById('sheet');
+  sheet.className = state.gothic ? 'gothic' : '';
+  sheet.replaceChildren();
+  state.recipients.forEach(r => {
+    const set = el('div', { className: 'set' }, addrLabel('to', r, state.toH));
+    if (state.showFrom) set.append(addrLabel('from', state.from, state.fromH));
+    if (state.showItem) {
+      const it = el('div', { className: 'label item' }, el('div', { className: 'head', textContent: '品名' }), el('div', { textContent: state.item }));
+      it.style.width = state.w + 'mm';
+      it.style.height = state.itemH + 'mm';
+      set.append(it);
+    }
+    sheet.append(set);
+  });
+}
+function update() { save(); renderSheet(); }
+
+bindSettings(); renderForm(); renderSheet();
+</script>
+</body>
+</html>
